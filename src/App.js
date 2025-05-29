@@ -1,142 +1,124 @@
-import React, { useState } from "react";
-import "./App.css";
+import React, { useState } from 'react';
+import './App.css';
 
 function App() {
-  const [frontList, setFrontList] = useState([]);
-  const [backList, setBackList] = useState([]);
-  const [usedBacks, setUsedBacks] = useState([]);
+  const [frontBarcodes, setFrontBarcodes] = useState([]);
+  const [backBarcodes, setBackBarcodes] = useState([]);
+  const [usedBackIndexes, setUsedBackIndexes] = useState([]);
+  const [input, setInput] = useState('');
+  const [isFrontPhase, setIsFrontPhase] = useState(true);
 
-  const [mode, setMode] = useState("front"); // 'front' or 'back'
+  const handleScan = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
-  const handleScan = (e) => {
-    if (e.key === "Enter") {
-      const value = e.target.value.trim();
-      if (!value) return;
-
-      if (mode === "front") {
-        setFrontList([...frontList, value]);
-      } else {
-        setBackList([...backList, value]);
-      }
-
-      e.target.value = "";
+    if (isFrontPhase) {
+      setFrontBarcodes([...frontBarcodes, trimmed]);
+    } else {
+      setBackBarcodes([...backBarcodes, trimmed]);
     }
+
+    setInput('');
   };
 
-  const extractPacketFromBack = (back) => {
-    const parts = back.split(",");
+  const extractPacketNo = (barcode) => {
+    const parts = barcode.split(',');
     const last = parts[parts.length - 1];
-    return last.trim();
+    return last.includes('-') ? last.trim().toUpperCase() : barcode.trim().toUpperCase();
   };
 
   const comparePackets = (front, backList, usedList) => {
-    const partsFront = front.split("-");
-    const baseFront = partsFront.slice(0, 2).join("-");
+    const partsFront = front.split('-');
+    const baseFront = partsFront.slice(0, 2).join('-');
     const suffixFront = partsFront[2] || null;
 
     let matchIndex = backList.findIndex((back, idx) => {
-      const packetBack = extractPacketFromBack(back);
-      const partsBack = packetBack.split("-");
-      const baseBack = partsBack.slice(0, 2).join("-");
+      const packetBack = extractPacketNo(back);
+      const partsBack = packetBack.split('-');
+      const baseBack = partsBack.slice(0, 2).join('-');
       return baseBack === baseFront && !usedList.includes(idx);
     });
 
     if (matchIndex === -1) return { matched: false };
 
-    const match = backList[matchIndex];
-    const packetBack = extractPacketFromBack(match);
-    const suffixBack = packetBack.split("-")[2] || null;
+    const matchedBack = extractPacketNo(backList[matchIndex]);
+    const suffixBack = matchedBack.split('-')[2] || null;
 
     return {
       matched: true,
       exact: suffixFront === suffixBack,
       suffixFront,
       suffixBack,
-      usedIndex: matchIndex,
-      fullBack: match,
+      usedIndex: matchIndex
     };
   };
 
-  const renderResult = (front) => {
-    const result = comparePackets(front, backList, usedBacks);
-    if (!result.matched) {
-      return (
-        <span className="status error">❌ Not Scanned</span>
-      );
-    }
+  const finalizeBackScan = () => {
+    const updated = [];
+    const newUsed = [];
 
-    const { exact, suffixFront, suffixBack, usedIndex } = result;
+    frontBarcodes.forEach((front) => {
+      const result = comparePackets(front, backBarcodes, newUsed);
+      if (result.matched) {
+        newUsed.push(result.usedIndex);
+      }
+      updated.push(result);
+    });
 
-    if (!usedBacks.includes(usedIndex)) {
-      setUsedBacks([...usedBacks, usedIndex]);
-    }
-
-    if (exact) {
-      return <span className="status success">✅ Matched</span>;
-    } else {
-      return (
-        <span className="status warning">
-          ⚠️ Diff: {suffixFront || "None"} vs {suffixBack || "None"}
-        </span>
-      );
-    }
+    setUsedBackIndexes(newUsed);
+    return updated;
   };
+
+  const results = finalizeBackScan();
 
   return (
     <div className="App">
-      <h1>💎 Diamond Packet Front-Back Checker</h1>
-
-      <div className="controls">
-        <button
-          className={mode === "front" ? "active" : ""}
-          onClick={() => setMode("front")}
-        >
-          Scan Front
+      <h1>📦 Diamond Packet Checker</h1>
+      <div style={{ marginBottom: 16 }}>
+        <button onClick={() => setIsFrontPhase(true)} disabled={isFrontPhase}>
+          1️⃣ Scan Front
         </button>
-        <button
-          className={mode === "back" ? "active" : ""}
-          onClick={() => setMode("back")}
-        >
-          Scan Back
+        <button onClick={() => setIsFrontPhase(false)} disabled={!isFrontPhase}>
+          2️⃣ Scan Back
         </button>
       </div>
 
-      <input
-        type="text"
-        onKeyDown={handleScan}
-        placeholder={`Scan ${mode.toUpperCase()} Barcode`}
-        autoFocus
-      />
+      <div style={{ marginBottom: 12 }}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+          placeholder={isFrontPhase ? 'Scan front barcode...' : 'Scan back barcode...'}
+          style={{ padding: 8, width: 300 }}
+        />
+        <button onClick={handleScan} style={{ marginLeft: 8 }}>➕ Add</button>
+      </div>
 
-      <div className="lists">
-        <div className="front-list">
-          <h2>Front Barcodes</h2>
-          <ul>
-            {frontList.map((front, idx) => (
-              <li key={idx}>
-                <strong>{front}</strong> - {renderResult(front)}
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="results">
+        {frontBarcodes.map((front, idx) => {
+          const result = results[idx];
+          let statusIcon = '⏳';
+          let message = 'Not Scanned';
 
-        <div className="back-list">
-          <h2>Back Barcodes</h2>
-          <ul>
-            {backList.map((back, idx) => {
-              const packet = extractPacketFromBack(back);
-              const used = usedBacks.includes(idx);
-              return (
-                <li
-                  key={idx}
-                  className={used ? "used" : "unused"}
-                >
-                  {packet}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+          if (result) {
+            if (!result.matched) {
+              statusIcon = '❌';
+              message = 'No matching back found';
+            } else if (result.exact) {
+              statusIcon = '✅';
+              message = 'Matched';
+            } else {
+              statusIcon = '⚠️';
+              message = `Suffix mismatch: Front [${result.suffixFront || '-'}], Back [${result.suffixBack || '-'}]`;
+            }
+          }
+
+          return (
+            <div key={idx} className="result-item">
+              <strong>{idx + 1}. {front}</strong> — <span>{statusIcon} {message}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
