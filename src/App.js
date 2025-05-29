@@ -1,37 +1,36 @@
 import React, { useState } from 'react';
 
-const comparePackets = (front, backList) => {
+const comparePackets = (front, backList, usedList) => {
   const partsFront = front.split('-');
   const baseFront = partsFront.slice(0, 2).join('-');
   const suffixFront = partsFront[2] || null;
 
-  let match = backList.find(back => {
+  let matchIndex = backList.findIndex((back, idx) => {
     const partsBack = back.split('-');
     const baseBack = partsBack.slice(0, 2).join('-');
-    return baseBack === baseFront;
+    return baseBack === baseFront && !usedList.includes(idx);
   });
 
-  if (!match) return { matched: false };
+  if (matchIndex === -1) return { matched: false };
 
+  const match = backList[matchIndex];
   const suffixBack = match.split('-')[2] || null;
 
-  if (suffixFront === suffixBack) {
-    return { matched: true, exact: true };
-  } else {
-    return {
-      matched: true,
-      exact: false,
-      suffixFront,
-      suffixBack
-    };
-  }
+  return {
+    matched: true,
+    exact: suffixFront === suffixBack,
+    suffixFront,
+    suffixBack,
+    usedIndex: matchIndex
+  };
 };
 
 function App() {
   const [frontBarcodes, setFrontBarcodes] = useState([]);
   const [backBarcodes, setBackBarcodes] = useState([]);
   const [mode, setMode] = useState('front'); // 'front' or 'back'
-
+  const [usedBacks, setUsedBacks] = useState([]);
+  
   const extractPacketFront = (barcode) => {
     const regex = /([0-9]+-[0-9]+(-[A-Z])?)$/;
     const match = barcode.match(regex);
@@ -62,9 +61,14 @@ function App() {
   };
 
   const getStatus = (packet) => {
-  const result = comparePackets(packet, backBarcodes);
+  const result = comparePackets(packet, backBarcodes, usedBacks);
 
   if (!result.matched) return '❌ Not Scanned';
+
+  // Mark this index as used
+  if (!usedBacks.includes(result.usedIndex)) {
+    setUsedBacks(prev => [...prev, result.usedIndex]);
+  }
 
   if (result.exact) return '✅ Exact Match';
 
