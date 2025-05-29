@@ -1,5 +1,32 @@
 import React, { useState } from 'react';
 
+const comparePackets = (front, backList) => {
+  const partsFront = front.split('-');
+  const baseFront = partsFront.slice(0, 2).join('-');
+  const suffixFront = partsFront[2] || null;
+
+  let match = backList.find(back => {
+    const partsBack = back.split('-');
+    const baseBack = partsBack.slice(0, 2).join('-');
+    return baseBack === baseFront;
+  });
+
+  if (!match) return { matched: false };
+
+  const suffixBack = match.split('-')[2] || null;
+
+  if (suffixFront === suffixBack) {
+    return { matched: true, exact: true };
+  } else {
+    return {
+      matched: true,
+      exact: false,
+      suffixFront,
+      suffixBack
+    };
+  }
+};
+
 function App() {
   const [frontBarcodes, setFrontBarcodes] = useState([]);
   const [backBarcodes, setBackBarcodes] = useState([]);
@@ -35,9 +62,14 @@ function App() {
   };
 
   const getStatus = (packet) => {
-    if (backBarcodes.includes(packet)) return '✅ Match';
-    return '❌ Not Scanned';
-  };
+  const result = comparePackets(packet, backBarcodes);
+
+  if (!result.matched) return '❌ Not Scanned';
+
+  if (result.exact) return '✅ Exact Match';
+
+  return `⚠ Number Match thay pn lochho che (Front=${result.suffixFront || 'None'}, Back=${result.suffixBack || 'None'})`;
+};
 
   return (
     <div style={{ maxWidth: 700, margin: 'auto', padding: 20, fontFamily: 'Arial' }}>
